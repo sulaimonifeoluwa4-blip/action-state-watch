@@ -1,0 +1,56 @@
+# self-check.yml — Schedule-triggered self-check against the live demo contract.
+#
+# IMPORTANT: This workflow must NEVER be a required branch-protection check.
+# It only runs on schedule/workflow_dispatch. Making it required would deadlock
+# every PR merge (per the sibling repos' hard-won rule).
+
+name: Self-Check
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      rpc_url:
+        description: 'Override RPC URL (default: public testnet)'
+        required: false
+
+jobs:
+  self-check:
+    runs-on: ubuntu-latest
+    # Never run on pull_request — this is a live monitoring job
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run State Watch against live demo contract
+        uses: ./
+        with:
+          sentinel-cli-path: 'install'
+          config-path: 'contracts.example.yml'
+          rpc-url: ${{ github.event.inputs.rpc_url || 'https://soroban-testnet.stellar.org' }}
+          # No alert channels configured for self-check — alerting is tested separately
+          # This job verifies the scan runs successfully against a real contract
+
+      - name: Print scan result summary
+        if: always()
+        run: |
+          echo "=== Self-Check Complete ==="
+          echo "This workflow verified the sentinel CLI can scan live contracts."
+          echo "The demo contract address: CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4"
+          echo "Check the action output above for health status."
