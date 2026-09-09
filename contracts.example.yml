@@ -1,0 +1,25 @@
+# contracts.yml — Example configuration for action-state-watch
+#
+# This file is seeded from the archival-fixtures-demo repo's proposal.
+# The demo contract at CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4
+# is a real, currently live, decaying testnet contract with ~120,000+ ledgers
+# remaining (as of the last check). It decays about one ledger per ~5 seconds,
+# so it will pass through Critical in days, not weeks.
+#
+# Thresholds here are set to match the demo repo's own overrides.
+# Default sentinel thresholds (30 day healthy / 7 day critical) would
+# false-flag this contract as Critical immediately.
+
+network: testnet
+
+contracts:
+  - address: 'CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4'
+    label: 'archival-fixtures-demo rapid-expiry entry'
+    keys: []  # Populate with padded SCVal XDR for the VALUE key from the demo repo
+    healthy-days: 1
+    critical-days: 1
+
+safety-margin-ledgers: 120960  # ~7 days at ~5s ledger close time
+
+alert:
+  dedupe-window-hours: 24
