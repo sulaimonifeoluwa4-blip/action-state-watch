@@ -1,0 +1,31 @@
+name: 'State Watch'
+description: 'Scheduled TTL/archival health monitor for deployed Soroban contracts'
+inputs:
+  sentinel-cli-path:
+    description: 'Path to the soroban-state-sentinel binary, or "install" to fetch it'
+    required: false
+    default: 'install'
+  config-path:
+    description: 'Path to the contracts.yml config file'
+    required: false
+    default: 'contracts.yml'
+  rpc-url:
+    description: 'Stellar RPC node URL for querying contract state'
+    required: true
+  slack-webhook-url:
+    description: 'Slack incoming webhook URL for alerts'
+    required: false
+  discord-webhook-url:
+    description: 'Discord webhook URL for alerts'
+    required: false
+  github-token:
+    description: 'GitHub token for creating/deduplicating issues'
+    required: false
+outputs:
+  contracts-critical:
+    description: 'JSON array of contract addresses in Critical or Archived state'
+  restore-xdr-artifact:
+    description: 'Name of the uploaded workflow artifact containing unsigned restore XDR'
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
