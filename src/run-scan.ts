@@ -103,7 +103,7 @@ export async function runScan(
       results.push({
         address: contract.address,
         label: contract.label,
-        band: "Archived",
+        band: "archived",
         live_until_ledger_seq: 0,
         ledgers_remaining: 0,
         days_remaining: 0,
@@ -117,10 +117,10 @@ export async function runScan(
 
   const summary = {
     total: results.length,
-    healthy: results.filter((r) => r.band === "Healthy").length,
-    expiring_soon: results.filter((r) => r.band === "ExpiringSoon").length,
-    critical: results.filter((r) => r.band === "Critical").length,
-    archived: results.filter((r) => r.band === "Archived").length,
+    healthy: results.filter((r) => r.band === "healthy").length,
+    expiring_soon: results.filter((r) => r.band === "expiring_soon").length,
+    critical: results.filter((r) => r.band === "critical").length,
+    archived: results.filter((r) => r.band === "archived").length,
   };
 
   return {
@@ -133,24 +133,24 @@ export async function runScan(
 /** Map a sentinel band string to our HealthBand type. */
 function parseHealthBand(raw: string): HealthBand {
   switch (raw) {
-    case "Healthy":
-    case "ExpiringSoon":
-    case "Critical":
-    case "Archived":
+    case "healthy":
+    case "expiring_soon":
+    case "critical":
+    case "archived":
       return raw;
     default:
-      core.warning(`Unknown health band from sentinel: "${raw}" — defaulting to Archived`);
-      return "Archived";
+      core.warning(`Unknown health band from sentinel: "${raw}" — defaulting to archived`);
+      return "archived";
   }
 }
 
 /**
  * Determine the overall health band for a contract from its scanned entries.
- * The worst entry wins: Archived > Critical > ExpiringSoon > Healthy.
+ * The worst entry wins: archived > critical > expiring_soon > healthy.
  */
 function worstBand(entries: SentinelScanOutput["entries"]): HealthBand {
-  const order: HealthBand[] = ["Archived", "Critical", "ExpiringSoon", "Healthy"];
-  let worst: HealthBand = "Healthy";
+  const order: HealthBand[] = ["archived", "critical", "expiring_soon", "healthy"];
+  let worst: HealthBand = "healthy";
   for (const entry of entries) {
     const band = parseHealthBand(entry.band);
     if (order.indexOf(band) < order.indexOf(worst)) {
@@ -217,7 +217,7 @@ async function scanContract(
     return {
       address: contract.address,
       label: contract.label,
-      band: "Healthy",
+      band: "healthy",
       live_until_ledger_seq: 0,
       ledgers_remaining: 0,
       days_remaining: 0,

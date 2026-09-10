@@ -50,7 +50,7 @@ export function buildDiscordMessage(results: ContractScanResult[]): DiscordMessa
       timestamp: result.scanned_at || new Date().toISOString(),
     };
 
-    if (result.band !== "Healthy") {
+    if (result.band !== "healthy") {
       embed.fields = [
         { name: "Ledgers Remaining", value: result.ledgers_remaining.toLocaleString(), inline: true },
         { name: "Days Remaining", value: `~${result.days_remaining}`, inline: true },

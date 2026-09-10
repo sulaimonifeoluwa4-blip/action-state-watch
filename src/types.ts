@@ -1,24 +1,25 @@
 /**
- * Typed mirror of soroban-state-sentinel JSON schema (v1.0.0).
+ * Typed mirror of soroban-state-sentinel JSON schema (v1.1.0).
  *
- * Verified against the sentinel's crates/cli/src/output/json.rs source.
+ * Verified against the sentinel's crates/cli/src/output/json.rs source,
+ * crates/ttl-scanner/src/health.rs, and SCHEMA.md v1.1.0.
+ *
  * The sentinel outputs a ScanJson with an entries[] array — NOT a flat
- * per-contract object.  Field names use snake_case exclusively (no
- * camelCase variants in the real schema).
+ * per-contract object.  Band values are lowercase snake_case:
+ * "healthy", "expiring_soon", "critical", "archived".
  *
- * NOTE: The prior version of this file claimed SCHEMA.md "1.1.0" and
- * contained speculative camelCase fallbacks (liveUntilLedgerSeq,
- * ledgersRemaining, etc.) and fields that don't exist in the sentinel
- * scan output (restore_xdr, extend_xdr).  Those have been corrected.
+ * NOTE: The prior version of this file claimed PascalCase band values
+ * ("Healthy", "ExpiringSoon", etc.) and contained speculative camelCase
+ * fallbacks.  Those were incorrect and have been corrected.
  */
 
-/** Health band values emitted by the sentinel (serde: snake_case on the wire, but values are PascalCase). */
-export type HealthBand = "Healthy" | "ExpiringSoon" | "Critical" | "Archived";
+/** Health band values emitted by the sentinel (lowercase snake_case). */
+export type HealthBand = "healthy" | "expiring_soon" | "critical" | "archived";
 
 /** Alert severity levels used by this action's alerting subsystem. */
 export type AlertSeverity = "info" | "warning" | "high" | "critical";
 
-// ─── Sentinel schema types (from crates/cli/src/output/json.rs) ───────────
+// ─── Sentinel schema types (from crates/cli/src/output/json.rs, SCHEMA.md v1.1.0) ──
 
 /** Top-level ScanJson emitted by `soroban-state-sentinel scan --json`. */
 export interface SentinelScanOutput {
@@ -88,7 +89,8 @@ export interface SentinelEntry {
  *   - `band` (not "health") — from EntryJson.band
  *   - `live_until_ledger_seq` (not "live_until_ledger") — from EntryJson.live_until_ledger_seq
  *
- * The action takes the worst entry per contract to produce this result.
+ * Band values use lowercase snake_case matching the sentinel:
+ *   - "healthy", "expiring_soon", "critical", "archived"
  */
 export interface ContractScanResult {
   /** Stellar contract address (C…). */

@@ -53,7 +53,7 @@ export function buildSlackMessage(results: ContractScanResult[]): SlackMessage {
     });
 
     // Fields for quick scanning
-    if (result.band !== "Healthy") {
+    if (result.band !== "healthy") {
       blocks.push({
         type: "section",
         fields: [

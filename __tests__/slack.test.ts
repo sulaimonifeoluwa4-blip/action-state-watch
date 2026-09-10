@@ -9,12 +9,12 @@ describe("alerts/slack", () => {
     mockFetch.mockReset();
   });
 
-  test("builds message for Critical contract", () => {
+  test("builds message for critical contract", () => {
     const results: ContractScanResult[] = [
       {
         address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
         label: "test-contract",
-        band: "Critical",
+        band: "critical",
         live_until_ledger_seq: 5000,
         ledgers_remaining: 500,
         days_remaining: 5,
@@ -35,11 +35,11 @@ describe("alerts/slack", () => {
     expect(textBlock).toBeDefined();
   });
 
-  test("builds message for Archived contract", () => {
+  test("builds message for archived contract", () => {
     const results: ContractScanResult[] = [
       {
         address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
-        band: "Archived",
+        band: "archived",
         live_until_ledger_seq: 0,
         ledgers_remaining: 0,
         days_remaining: 0,
@@ -60,7 +60,7 @@ describe("alerts/slack", () => {
     const results: ContractScanResult[] = [
       {
         address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
-        band: "Healthy",
+        band: "healthy",
         live_until_ledger_seq: 200000,
         ledgers_remaining: 100000,
         days_remaining: 30,
@@ -80,7 +80,7 @@ describe("alerts/slack", () => {
       {
         address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
         label: "contract-a",
-        band: "Critical",
+        band: "critical",
         live_until_ledger_seq: 5000,
         ledgers_remaining: 500,
         days_remaining: 5,
@@ -91,7 +91,7 @@ describe("alerts/slack", () => {
       {
         address: "GCEZxee7L6Dx8EtiYXRzWZ6F7zB3nJpQR3kdBbA6FPX6",
         label: "contract-b",
-        band: "Archived",
+        band: "archived",
         live_until_ledger_seq: 0,
         ledgers_remaining: 0,
         days_remaining: 0,

@@ -67,7 +67,7 @@ export async function handleGitHubIssues(
     if (existing) {
       // Update existing issue with latest status
       await commentOnIssue(octokit, repo, existing.number, result);
-    } else if (result.band === "Critical" || result.band === "Archived") {
+    } else if (result.band === "critical" || result.band === "archived") {
       // Create new issue
       await createIssue(octokit, repo, result);
     }
@@ -183,7 +183,7 @@ async function handleRecovery(
     const address = addressMatch[1];
     const currentResult = results.find((r) => r.address === address);
 
-    if (currentResult && currentResult.band === "Healthy") {
+    if (currentResult && currentResult.band === "healthy") {
       // Contract has recovered — close the issue with a comment
       try {
         await octokit.rest.issues.createComment({
