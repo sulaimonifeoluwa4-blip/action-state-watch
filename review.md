@@ -1,8 +1,8 @@
 # Code Review — action-state-watch
 
 **Reviewer:** Buffy (Codebuff AI)  
-**Date:** September 9, 2026  
-**Scope:** Full project — 18 commits, 17 source files, 35 tests  
+**Date:** September 10, 2026  
+**Scope:** Full project — 30 commits, 17 source files, 49 tests  
 
 ---
 
@@ -52,17 +52,16 @@ The action fails fast if no alert channel is configured. A silent no-op bot woul
 
 - Typed mirror of SCHEMA.md 1.1.0 with clear JSDoc
 - `HealthBand` and `AlertSeverity` are properly constrained string unions
-- `ContractScanResult` includes both snake_case and camelCase field variants (defensive)
+- `ContractScanResult` uses lowercase snake_case matching real sentinel output
 - `ScanReport` summary counts match the four health bands
-
-**Note:** The camelCase fallbacks in `run-scan.ts` (`liveUntilLedgerSeq`, `ledgersRemaining`) are a good precaution for sentinel version drift, but should be verified against the actual SCHEMA.md when the sibling repos are available.
+- `ContractsConfig` cleaned of dead `safety_margin_ledgers` field (removed — flag does not exist in sentinel CLI)
 
 ### `src/config.ts` — ✅ Solid Validation
 
 - Validates YAML parse errors, missing network, empty contracts array
 - Stellar address regex (`/^[CG][A-Z0-9]{55}$/`) is correct for base32-encoded addresses
 - Threshold overrides (`healthy-days`, `critical-days`) properly validated as numbers
-- ~~`safety-margin-ledgers`~~ Removed — flag does not exist in real sentinel CLI (verified against `args.rs`)
+- `safety-margin-ledgers` field removed — flag does not exist in real sentinel CLI (verified against `args.rs`)
 - Alert config parsed with optional `dedupe-window-hours`
 
 **Minor:** Could add a `dedupe_window_hours` field to `ContractEntry` for per-contract overrides, but this is an enhancement, not a bug.
@@ -134,7 +133,7 @@ Address regex now matches both `C`- and `G`-prefixed addresses for recovery dete
 - Seeded from archival-fixtures-demo proposal
 - Demo contract address correct
 - Thresholds set to `healthy-days: 1`, `critical-days: 1` (matches demo repo)
-- Safety margin: 120960 ledgers (~7 days)
+- Dead `safety-margin-ledgers` field removed (flag does not exist in sentinel CLI)
 
 ---
 
@@ -149,7 +148,7 @@ Address regex now matches both `C`- and `G`-prefixed addresses for recovery dete
 | `alerts/github-issue.ts` | 86% | Good — idempotency, recovery, dedup tested |
 | `run-scan.ts` | 82% | Good — mocked execFileSync, CLI args, error handling tested |
 
-**Total: 50 tests passing** (15 new tests added for dedup window, parallel scanning, and run-scan coverage)
+**Total: 49 tests passing** (14 net new tests added for dedup window, parallel scanning, and run-scan coverage; 1 redundant safety-margin-ledgers test removed)
 
 ### Test Quality Highlights
 
@@ -199,7 +198,7 @@ The RPC URL is logged via `core.info()`. In GitHub Actions, this is visible in w
 
 ### ✅ Conventional Commits
 
-All 17 commits follow the format:
+All 30 commits follow the format:
 ```
 type(scope): description
 ```
@@ -285,12 +284,12 @@ Contracts are now scanned in parallel using `Promise.all` with a `createConcurre
 | No duplicate issues | ✅ | Comment on existing |
 | Severity differentiation | ✅ | 4 bands, 4 severities |
 | SCHEMA.md 1.1.0 types | ✅ | Typed mirror provided |
-| Sentinel CLI flags | ✅ | All flags passed through |
+| Sentinel CLI flags | ✅ | Verified against args.rs: `--rpc-url`, `--keys`, `--healthy-days`, `--critical-days`, `--json` |
 | Threshold overrides | ✅ | Per-contract config |
 | Schedule-only monitoring | ✅ | Never on pull_request |
 | self-check not required | ✅ | Explicitly marked |
 | Fail-fast on no alerts | ✅ | Clear error message |
-| Conventional commits | ✅ | 17 clean commits |
+| Conventional commits | ✅ | 30 clean commits |
 | dist/ bundled | ✅ | ncc output committed |
 | Node 20 runtime | ✅ | action.yml specifies |
 
@@ -300,6 +299,8 @@ Contracts are now scanned in parallel using `Promise.all` with a `createConcurre
 
 **Quality: 9.5/10**
 
-The implementation is production-ready. It correctly follows all stated constraints, has clean separation of concerns, and includes comprehensive tests. All four minor improvements from the original review have been resolved.
+The implementation is production-ready. It correctly follows all stated constraints, has clean separation of concerns, and includes comprehensive tests. All four minor improvements from the original review have been resolved. The `--safety-margin-ledgers` discrepancy has been investigated and the dead config field removed with evidence from the real sentinel source.
 
-**Ready to ship.** 🚀
+**Remaining blocker:** The `self-check.yml` workflow cannot be triggered via `workflow_dispatch` because the GITHUB_TOKEN lacks `actions:write` permission. The local scan against the real demo contract (documented in `docs/live-verification.md`) verifies the sentinel binary and parsing logic work correctly. To complete CI-level verification, either create a PAT with `repo` + `actions:write` scopes or wait for the scheduled cron.
+
+**Ready to ship** (pending CI verification via cron or PAT). 🚀
