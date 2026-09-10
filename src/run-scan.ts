@@ -85,35 +85,72 @@ async function installSentinelCli(): Promise<string> {
 }
 
 /**
+ * Simple concurrency limiter. Returns a function that runs async work
+ * with at most `limit` concurrent executions.
+ */
+function createConcurrencyLimit(limit: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  function next() {
+    while (active < limit && queue.length > 0) {
+      active++;
+      queue.shift()!();
+    }
+  }
+
+  function release() {
+    active--;
+    next();
+  }
+
+  return function run<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      queue.push(() => {
+        fn().then(resolve, reject).finally(release);
+      });
+      next();
+    });
+  };
+}
+
+/** Default concurrency for parallel contract scans. */
+const DEFAULT_SCAN_CONCURRENCY = 5;
+
+/**
  * Run a scan for all contracts in the config and return aggregated results.
+ * Contracts are scanned in parallel with a concurrency limit.
  */
 export async function runScan(
   sentinelPath: string,
   config: ContractsConfig,
   rpcUrl: string
 ): Promise<ScanReport> {
-  const results: ContractScanResult[] = [];
+  const limit = createConcurrencyLimit(DEFAULT_SCAN_CONCURRENCY);
 
-  for (const contract of config.contracts) {
-    try {
-      const result = await scanContract(sentinelPath, contract, rpcUrl);
-      results.push(result);
-    } catch (e) {
-      core.warning(`Scan failed for ${contract.address}: ${e instanceof Error ? e.message : String(e)}`);
-      results.push({
-        address: contract.address,
-        label: contract.label,
-        band: "archived",
-        live_until_ledger_seq: 0,
-        ledgers_remaining: 0,
-        days_remaining: 0,
-        healthy_days_threshold: 0,
-        critical_days_threshold: 0,
-        scanned_at: new Date().toISOString(),
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }
+  const resultPromises = config.contracts.map((contract) =>
+    limit(async () => {
+      try {
+        return await scanContract(sentinelPath, contract, rpcUrl);
+      } catch (e) {
+        core.warning(`Scan failed for ${contract.address}: ${e instanceof Error ? e.message : String(e)}`);
+        return {
+          address: contract.address,
+          label: contract.label,
+          band: "archived" as const,
+          live_until_ledger_seq: 0,
+          ledgers_remaining: 0,
+          days_remaining: 0,
+          healthy_days_threshold: 0,
+          critical_days_threshold: 0,
+          scanned_at: new Date().toISOString(),
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    })
+  );
+
+  const results = await Promise.all(resultPromises);
 
   const summary = {
     total: results.length,
@@ -196,7 +233,8 @@ async function scanContract(
   }
 
   // NOTE: --safety-margin-ledgers does NOT exist in the real sentinel CLI.
-  // The sentinel uses health_config fields instead.  Removed.
+  // Verified against sentinel args.rs: the sentinel uses health_config fields
+  // (healthy_min_ledgers, critical_max_ledgers) internally instead.
 
   core.info(`Scanning ${contract.address} (${contract.label || "unlabeled"})...`);
 

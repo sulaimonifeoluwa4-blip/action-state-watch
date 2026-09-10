@@ -3,6 +3,9 @@ import * as github from "@actions/github";
 import { ContractScanResult } from "../types";
 import { mapSeverity } from "../severity";
 
+/** Default dedup window in hours if not configured. */
+const DEFAULT_DEDUPE_WINDOW_HOURS = 24;
+
 /** Label applied to state-watch issues for dedup search. */
 export const STATE_WATCH_LABEL = "state-watch";
 
@@ -47,14 +50,19 @@ async function findExistingIssue(
  * Create or update issues for Critical/Archived contracts.
  * Deduplicates by searching for open issues with `state-watch` label
  * whose title contains the contract address.
+ *
+ * Respects `dedupeWindowHours` — if a comment or issue was created within
+ * the window, no new comment is posted to avoid spam.
  */
 export async function handleGitHubIssues(
   token: string,
-  results: ContractScanResult[]
+  results: ContractScanResult[],
+  dedupeWindowHours?: number
 ): Promise<void> {
   const octokit = getClient(token);
   const context = github.context;
   const repo = { owner: context.repo.owner, repo: context.repo.repo };
+  const windowMs = (dedupeWindowHours ?? DEFAULT_DEDUPE_WINDOW_HOURS) * 3600 * 1000;
 
   for (const result of results) {
     const mapping = mapSeverity(result.band);
@@ -65,6 +73,14 @@ export async function handleGitHubIssues(
     const existing = await findExistingIssue(octokit, repo, result.address);
 
     if (existing) {
+      // Check dedup window before commenting
+      const lastActivity = await getLastActivityTime(octokit, repo, existing.number);
+      if (lastActivity && Date.now() - lastActivity.getTime() < windowMs) {
+        core.info(
+          `Skipping comment on issue #${existing.number} — within ${dedupeWindowHours ?? DEFAULT_DEDUPE_WINDOW_HOURS}h dedup window`
+        );
+        continue;
+      }
       // Update existing issue with latest status
       await commentOnIssue(octokit, repo, existing.number, result);
     } else if (result.band === "critical" || result.band === "archived") {
@@ -115,6 +131,38 @@ async function createIssue(
     core.info(`Created issue for ${result.address}`);
   } catch (e) {
     core.warning(`Failed to create issue for ${result.address}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+/**
+ * Get the most recent activity timestamp on an issue (latest comment, or issue creation).
+ */
+async function getLastActivityTime(
+  octokit: ReturnType<typeof getClient>,
+  repo: { owner: string; repo: string },
+  issueNumber: number
+): Promise<Date | null> {
+  try {
+    const comments = await octokit.rest.issues.listComments({
+      ...repo,
+      issue_number: issueNumber,
+      per_page: 1,
+      direction: "desc",
+    });
+
+    if (comments.data.length > 0 && comments.data[0].created_at) {
+      return new Date(comments.data[0].created_at);
+    }
+
+    // No comments — fall back to issue creation time
+    const issue = await octokit.rest.issues.get({
+      ...repo,
+      issue_number: issueNumber,
+    });
+    return new Date(issue.data.created_at);
+  } catch (e) {
+    core.warning(`Failed to get last activity for issue #${issueNumber}: ${e instanceof Error ? e.message : String(e)}`);
+    return null;
   }
 }
 

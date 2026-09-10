@@ -90,7 +90,11 @@ async function run(): Promise<void> {
       // GitHub Issues (for Critical and Archived)
       if (githubToken) {
         try {
-          await handleGitHubIssues(githubToken, alertResults);
+          await handleGitHubIssues(
+            githubToken,
+            alertResults,
+            config.alert?.dedupe_window_hours
+          );
         } catch (e) {
           core.warning(`GitHub issue handling failed: ${e instanceof Error ? e.message : String(e)}`);
         }

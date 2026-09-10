@@ -84,19 +84,29 @@ Scanned at: 2026-09-10T08:33:01.000Z
 
 ## Workflow Dispatch Blocker
 
-**Cannot trigger `self-check.yml` via `workflow_dispatch`** — no GitHub authentication is available in this environment:
+**Cannot trigger `self-check.yml` via `workflow_dispatch`** — the GITHUB_TOKEN lacks `actions:write` permission:
 
-- `gh auth status`: not logged in
-- `GH_TOKEN`: not set
-- `GITHUB_TOKEN`: not set
-- `GITHUB_PAT`: not set
+```
+$ gh auth status
+github.com
+  ✓ Logged in to github.com account sulaimonifeoluwa4-blip (GITHUB_TOKEN)
+  - Active account: true
+  - Git operations protocol: https
+  - Token: ghu_************************************
 
-To complete Gap 3, the following is required:
-1. Authenticate with GitHub: `gh auth login` or set `GH_TOKEN` environment variable
-2. Trigger the workflow: `gh workflow run self-check.yml`
-3. Monitor the run: `gh run watch`
+$ gh workflow run self-check.yml
+could not create workflow dispatch event: HTTP 403: Resource not accessible by integration
+  (https://api.github.com/repos/Aycode01/action-state-watch/actions/workflows/354011119/dispatches)
+```
 
-Alternatively, push the changes to `origin/main` and the scheduled cron (`0 */6 * * *`) will trigger the workflow automatically.
+The token can read workflows (`GET /actions/workflows` succeeds) but cannot dispatch them (`POST /actions/workflows/{id}/dispatches` returns 403). This is a known GitHub limitation — fine-grained tokens and GitHub App tokens often don't include the `actions:write` scope by default.
+
+**To complete this step, one of the following is required:**
+1. Create a Personal Access Token (PAT) with `repo` and `actions:write` scopes, then set it as `GH_TOKEN`
+2. Configure the repository's GITHUB_TOKEN permissions to include `actions: write` in Settings > Actions > General > Workflow permissions
+3. Push changes to `origin/main` and wait for the scheduled cron (`0 */6 * * *`) to trigger automatically
+
+The local scan against the real demo contract (captured above) verifies the sentinel binary and parsing logic work correctly. The workflow_dispatch step would additionally verify the GitHub Action packaging (ncc bundle, action.yml inputs) in a real GitHub Actions runner.
 
 ## Schema Verification Summary
 

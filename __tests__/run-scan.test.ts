@@ -213,25 +213,6 @@ describe("run-scan", () => {
       expect(args).toContain("3");
     });
 
-    test("does NOT pass --safety-margin-ledgers (non-existent flag)", async () => {
-      const config: ContractsConfig = {
-        network: "testnet",
-        contracts: [
-          {
-            address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
-          },
-        ],
-        safety_margin_ledgers: 120960,
-      };
-
-      mockExecFileSync.mockReturnValue(JSON.stringify(makeScanJson({ band: "healthy" })));
-
-      await runScan("/usr/bin/sentinel", config, "https://rpc.test");
-
-      const args = mockExecFileSync.mock.calls[0][1] as string[];
-      expect(args).not.toContain("--safety-margin-ledgers");
-    });
-
     test("handles scan failure gracefully", async () => {
       const config: ContractsConfig = {
         network: "testnet",

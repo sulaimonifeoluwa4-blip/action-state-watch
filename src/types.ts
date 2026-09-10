@@ -149,6 +149,5 @@ export interface AlertConfig {
 export interface ContractsConfig {
   network: string;
   contracts: ContractEntry[];
-  safety_margin_ledgers?: number;
   alert?: AlertConfig;
 }

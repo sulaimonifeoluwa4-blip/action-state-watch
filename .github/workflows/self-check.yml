@@ -38,14 +38,29 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Checkout soroban-state-sentinel
+        uses: actions/checkout@v4
+        with:
+          repository: Aycode01/soroban-state-sentinel
+          path: sentinel-src
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build sentinel binary
+        working-directory: sentinel-src
+        run: cargo build --release --bin soroban-state-sentinel -p sentinel-cli
+
+      - name: Add sentinel binary to PATH
+        run: echo "${{ github.workspace }}/sentinel-src/target/release" >> "$GITHUB_PATH"
+
       - name: Run State Watch against live demo contract
         uses: ./
         with:
           sentinel-cli-path: 'install'
           config-path: 'contracts.example.yml'
           rpc-url: ${{ github.event.inputs.rpc_url || 'https://soroban-testnet.stellar.org' }}
-          # No alert channels configured for self-check — alerting is tested separately
-          # This job verifies the scan runs successfully against a real contract
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Print scan result summary
         if: always()

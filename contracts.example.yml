@@ -19,7 +19,5 @@ contracts:
     healthy-days: 1
     critical-days: 1
 
-safety-margin-ledgers: 120960  # ~7 days at ~5s ledger close time
-
 alert:
   dedupe-window-hours: 24

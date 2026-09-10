@@ -8,7 +8,6 @@ import { ContractsConfig, ContractEntry, AlertConfig } from "./types";
  * The file is based on archival-fixtures-demo's proposal, with fields:
  *   network: testnet
  *   contracts: [...]
- *   safety-margin-ledgers: 120960
  *   alert:
  *     dedupe-window-hours: 24
  */
@@ -46,15 +45,6 @@ export function loadConfig(configPath: string): ContractsConfig {
     (entry: unknown, i: number) => validateContractEntry(entry, i)
   );
 
-  // Optional safety-margin-ledgers
-  let safetyMarginLedgers: number | undefined;
-  if (parsed["safety-margin-ledgers"] !== undefined) {
-    safetyMarginLedgers = validatePositiveInteger(
-      parsed["safety-margin-ledgers"],
-      "safety-margin-ledgers"
-    );
-  }
-
   // Optional alert config
   let alert: AlertConfig | undefined;
   if (parsed["alert"] !== undefined) {
@@ -64,7 +54,6 @@ export function loadConfig(configPath: string): ContractsConfig {
   return {
     network: parsed["network"] as string,
     contracts,
-    safety_margin_ledgers: safetyMarginLedgers,
     alert,
   };
 }
