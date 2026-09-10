@@ -14,6 +14,8 @@ jest.mock("@actions/core", () => ({
 jest.mock("@actions/github", () => {
   const mockIssues = {
     listForRepo: jest.fn(),
+    listComments: jest.fn(),
+    get: jest.fn(),
     create: jest.fn(),
     createComment: jest.fn(),
     update: jest.fn(),
@@ -215,6 +217,10 @@ describe("alerts/github-issue", () => {
           },
         ],
       });
+    // Last comment was old (outside dedup window)
+    mockIssues.listComments.mockResolvedValue({
+      data: [{ created_at: "2026-01-01T00:00:00.000Z" }],
+    });
     mockIssues.createComment.mockResolvedValue({ data: {} });
 
     await handleGitHubIssues("fake-token", [criticalResult]);
@@ -223,5 +229,109 @@ describe("alerts/github-issue", () => {
     expect(mockIssues.create).toHaveBeenCalledTimes(1); // still just 1 from first run
     // Should comment on existing
     expect(mockIssues.createComment).toHaveBeenCalledTimes(1);
+  });
+
+  describe("dedup window", () => {
+    test("skips comment when last activity is within dedup window", async () => {
+      const existingIssue = {
+        number: 42,
+        title: `[state-watch] Critical: ${criticalResult.address}`,
+      };
+
+      mockIssues.listForRepo
+        .mockResolvedValueOnce({ data: [existingIssue] })
+        .mockResolvedValueOnce({ data: [existingIssue] });
+
+      // Last comment was 1 hour ago (within 24h dedup window)
+      const oneHourAgo = new Date(Date.now() - 1 * 3600 * 1000).toISOString();
+      mockIssues.listComments.mockResolvedValue({
+        data: [{ created_at: oneHourAgo }],
+      });
+
+      await handleGitHubIssues("fake-token", [criticalResult], 24);
+
+      // Should NOT comment — within dedup window
+      expect(mockIssues.createComment).not.toHaveBeenCalled();
+      expect(mockIssues.create).not.toHaveBeenCalled();
+    });
+
+    test("comments when last activity is outside dedup window", async () => {
+      const existingIssue = {
+        number: 42,
+        title: `[state-watch] Critical: ${criticalResult.address}`,
+      };
+
+      mockIssues.listForRepo
+        .mockResolvedValueOnce({ data: [existingIssue] })
+        .mockResolvedValueOnce({ data: [existingIssue] });
+
+      // Last comment was 48 hours ago (outside 24h dedup window)
+      const twoDaysAgo = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+      mockIssues.listComments.mockResolvedValue({
+        data: [{ created_at: twoDaysAgo }],
+      });
+      mockIssues.createComment.mockResolvedValue({ data: {} });
+
+      await handleGitHubIssues("fake-token", [criticalResult], 24);
+
+      // Should comment — outside dedup window
+      expect(mockIssues.createComment).toHaveBeenCalledTimes(1);
+    });
+
+    test("uses default 24h window when dedupeWindowHours is not specified", async () => {
+      const existingIssue = {
+        number: 42,
+        title: `[state-watch] Critical: ${criticalResult.address}`,
+      };
+
+      mockIssues.listForRepo
+        .mockResolvedValueOnce({ data: [existingIssue] })
+        .mockResolvedValueOnce({ data: [existingIssue] });
+
+      // Last comment was 12 hours ago (within default 24h window)
+      const twelveHoursAgo = new Date(Date.now() - 12 * 3600 * 1000).toISOString();
+      mockIssues.listComments.mockResolvedValue({
+        data: [{ created_at: twelveHoursAgo }],
+      });
+
+      await handleGitHubIssues("fake-token", [criticalResult]);
+
+      // Should NOT comment — within default 24h window
+      expect(mockIssues.createComment).not.toHaveBeenCalled();
+    });
+
+    test("falls back to issue creation time when no comments exist", async () => {
+      const existingIssue = {
+        number: 42,
+        title: `[state-watch] Critical: ${criticalResult.address}`,
+      };
+
+      mockIssues.listForRepo
+        .mockResolvedValueOnce({ data: [existingIssue] })
+        .mockResolvedValueOnce({ data: [existingIssue] });
+
+      // No comments on the issue
+      mockIssues.listComments.mockResolvedValue({ data: [] });
+      // Issue was created 2 hours ago (within dedup window)
+      mockIssues.get.mockResolvedValue({
+        data: { created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString() },
+      });
+
+      await handleGitHubIssues("fake-token", [criticalResult], 24);
+
+      // Should NOT comment — issue created within dedup window
+      expect(mockIssues.createComment).not.toHaveBeenCalled();
+    });
+
+    test("still creates new issues even within dedup window", async () => {
+      // No existing issue
+      mockIssues.listForRepo.mockResolvedValue({ data: [] });
+      mockIssues.create.mockResolvedValue({ data: { number: 1 } });
+
+      await handleGitHubIssues("fake-token", [criticalResult], 24);
+
+      // New issue should always be created
+      expect(mockIssues.create).toHaveBeenCalledTimes(1);
+    });
   });
 });
