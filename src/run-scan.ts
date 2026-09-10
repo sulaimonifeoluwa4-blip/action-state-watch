@@ -1,5 +1,5 @@
 import * as core from "@actions/core";
-import { execSync } from "child_process";
+import { execFileSync, execSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -161,10 +161,9 @@ async function scanContract(
 
   core.info(`Scanning ${contract.address} (${contract.label || "unlabeled"})...`);
 
-  const cmd = `${sentinelPath} ${args.join(" ")}`;
-  core.debug(`Running: ${cmd}`);
+  core.debug(`Running: ${sentinelPath} ${args.join(" ")}`);
 
-  const output = execSync(cmd, {
+  const output = execFileSync(sentinelPath, args, {
     encoding: "utf8",
     timeout: 120_000, // 2 minute timeout per contract
     maxBuffer: 1024 * 1024, // 1MB buffer
