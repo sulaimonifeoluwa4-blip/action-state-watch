@@ -30,8 +30,6 @@ contracts:
     healthy-days: 30
     critical-days: 7
 
-safety-margin-ledgers: 120960  # ~7 days at 5s ledger close
-
 alert:
   dedupe-window-hours: 24
 ```
@@ -113,8 +111,6 @@ contracts:
     keys: ['AAAAAQ==']    # Optional: padded SCVal XDR keys
     healthy-days: 30       # Optional: override default threshold
     critical-days: 7       # Optional: override default threshold
-
-safety-margin-ledgers: 120960  # Optional: safety buffer in ledgers
 
 alert:
   dedupe-window-hours: 24  # Optional: dedup window for GitHub Issues

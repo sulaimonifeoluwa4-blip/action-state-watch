@@ -62,7 +62,7 @@ The action fails fast if no alert channel is configured. A silent no-op bot woul
 - Validates YAML parse errors, missing network, empty contracts array
 - Stellar address regex (`/^[CG][A-Z0-9]{55}$/`) is correct for base32-encoded addresses
 - Threshold overrides (`healthy-days`, `critical-days`) properly validated as numbers
-- `safety-margin-ledgers` validated as positive integer
+- ~~`safety-margin-ledgers`~~ Removed — flag does not exist in real sentinel CLI (verified against `args.rs`)
 - Alert config parsed with optional `dedupe-window-hours`
 
 **Minor:** Could add a `dedupe_window_hours` field to `ContractEntry` for per-contract overrides, but this is an enhancement, not a bug.

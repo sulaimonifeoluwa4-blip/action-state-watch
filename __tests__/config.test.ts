@@ -28,7 +28,6 @@ contracts:
     label: test-contract
     healthy-days: 1
     critical-days: 1
-safety-margin-ledgers: 120960
 alert:
   dedupe-window-hours: 24
 `
@@ -50,7 +49,6 @@ alert:
     expect(config.contracts[0].label).toBe("test-contract");
     expect(config.contracts[0].healthy_days).toBe(1);
     expect(config.contracts[0].critical_days).toBe(1);
-    expect(config.safety_margin_ledgers).toBe(120960);
     expect(config.alert?.dedupe_window_hours).toBe(24);
   });
 
@@ -69,7 +67,6 @@ contracts:
     expect(config.network).toBe("testnet");
     expect(config.contracts).toHaveLength(1);
     expect(config.contracts[0].label).toBeUndefined();
-    expect(config.safety_margin_ledgers).toBeUndefined();
     expect(config.alert).toBeUndefined();
   });
 

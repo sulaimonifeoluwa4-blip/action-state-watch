@@ -233,7 +233,8 @@ async function scanContract(
   }
 
   // NOTE: --safety-margin-ledgers does NOT exist in the real sentinel CLI.
-  // The sentinel uses health_config fields instead.  Removed.
+  // Verified against sentinel args.rs: the sentinel uses health_config fields
+  // (healthy_min_ledgers, critical_max_ledgers) internally instead.
 
   core.info(`Scanning ${contract.address} (${contract.label || "unlabeled"})...`);
 
