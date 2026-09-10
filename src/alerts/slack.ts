@@ -19,7 +19,7 @@ interface SlackMessage {
  */
 export function buildSlackMessage(results: ContractScanResult[]): SlackMessage {
   const criticalResults = results.filter((r) => {
-    const mapping = mapSeverity(r.health);
+    const mapping = mapSeverity(r.band);
     return mapping.shouldAlert;
   });
 
@@ -41,7 +41,7 @@ export function buildSlackMessage(results: ContractScanResult[]): SlackMessage {
   blocks.push({ type: "divider" });
 
   for (const result of criticalResults) {
-    const mapping = mapSeverity(result.health);
+    const mapping = mapSeverity(result.band);
 
     // Section with text
     blocks.push({
@@ -53,7 +53,7 @@ export function buildSlackMessage(results: ContractScanResult[]): SlackMessage {
     });
 
     // Fields for quick scanning
-    if (result.health !== "Healthy") {
+    if (result.band !== "Healthy") {
       blocks.push({
         type: "section",
         fields: [

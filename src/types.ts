@@ -1,39 +1,112 @@
 /**
- * Typed mirror of soroban-state-sentinel SCHEMA.md version 1.1.0.
+ * Typed mirror of soroban-state-sentinel JSON schema (v1.0.0).
  *
- * The sentinel CLI outputs per-contract JSON with these fields.
- * This file must stay in sync with the canonical schema — do NOT
- * guess field names; read SCHEMA.md directly when updating.
+ * Verified against the sentinel's crates/cli/src/output/json.rs source.
+ * The sentinel outputs a ScanJson with an entries[] array — NOT a flat
+ * per-contract object.  Field names use snake_case exclusively (no
+ * camelCase variants in the real schema).
+ *
+ * NOTE: The prior version of this file claimed SCHEMA.md "1.1.0" and
+ * contained speculative camelCase fallbacks (liveUntilLedgerSeq,
+ * ledgersRemaining, etc.) and fields that don't exist in the sentinel
+ * scan output (restore_xdr, extend_xdr).  Those have been corrected.
  */
 
-/** Health band values emitted by the sentinel. */
+/** Health band values emitted by the sentinel (serde: snake_case on the wire, but values are PascalCase). */
 export type HealthBand = "Healthy" | "ExpiringSoon" | "Critical" | "Archived";
 
 /** Alert severity levels used by this action's alerting subsystem. */
 export type AlertSeverity = "info" | "warning" | "high" | "critical";
 
-/** A single contract's scan result as returned by `soroban-state-sentinel scan --json`. */
+// ─── Sentinel schema types (from crates/cli/src/output/json.rs) ───────────
+
+/** Top-level ScanJson emitted by `soroban-state-sentinel scan --json`. */
+export interface SentinelScanOutput {
+  schema_version: string;
+  generated_at_unix: number;
+  command: {
+    subcommand: string;
+    contract_id: string;
+    rpc_url: string;
+  };
+  network: {
+    passphrase: string;
+    protocol_version: number;
+    latest_ledger: number;
+    ledger_close_seconds: number;
+    ledger_close_seconds_source: string;
+    fee_per_rent_1kb: number;
+    fee_per_rent_1kb_source: string;
+    average_soroban_state_size_bytes: number | null;
+    max_entry_ttl: number;
+    min_persistent_ttl: number;
+    min_temporary_ttl: number;
+  };
+  health_config: {
+    healthy_min_days: number;
+    critical_max_days: number;
+    healthy_min_ledgers: number;
+    critical_max_ledgers: number;
+    extend_horizon_ledgers: number;
+  };
+  summary: {
+    entries_scanned: number;
+    healthy: number;
+    expiring_soon: number;
+    critical: number;
+    archived: number;
+    has_critical: boolean;
+  };
+  entries: SentinelEntry[];
+}
+
+/** A single scanned ledger entry within a ScanJson. */
+export interface SentinelEntry {
+  id: string;
+  label: string;
+  kind: string;
+  durability: string | null;
+  band: string;
+  current_ledger_seq: number;
+  live_until_ledger_seq: number | null;
+  ledgers_remaining: number | null;
+  days_remaining: number | null;
+  estimated_archive_unix: number | null;
+  size_bytes: number | null;
+  key_xdr: string;
+  ttl_key_xdr: string;
+  extend_to_healthy_cost_stroops: number | null;
+  restore_cost_stroops: number | null;
+}
+
+// ─── Action-internal types (derived from sentinel output) ─────────────────
+
+/**
+ * A single contract's scan result as derived from the sentinel's ScanJson.
+ *
+ * Field names match the sentinel schema:
+ *   - `band` (not "health") — from EntryJson.band
+ *   - `live_until_ledger_seq` (not "live_until_ledger") — from EntryJson.live_until_ledger_seq
+ *
+ * The action takes the worst entry per contract to produce this result.
+ */
 export interface ContractScanResult {
   /** Stellar contract address (C…). */
   address: string;
   /** Human-readable label from config, if provided. */
   label?: string;
-  /** Current health band classification. */
-  health: HealthBand;
-  /** The ledger sequence at which the contract's data expires. */
-  live_until_ledger: number;
-  /** Number of ledgers remaining until expiry (0 if archived). */
+  /** Current health band classification (worst across all entries). */
+  band: HealthBand;
+  /** The ledger sequence at which the contract's data expires (minimum across entries). */
+  live_until_ledger_seq: number;
+  /** Number of ledgers remaining until expiry (minimum across entries, 0 if archived). */
   ledgers_remaining: number;
-  /** Estimated days remaining at current ledger close rate. */
+  /** Estimated days remaining at current ledger close rate (minimum across entries). */
   days_remaining: number;
   /** The healthy-days threshold used for classification. */
   healthy_days_threshold: number;
   /** The critical-days threshold used for classification. */
   critical_days_threshold: number;
-  /** Unsigned XDR for restore, if the sentinel produced one (Archived state). */
-  restore_xdr?: string;
-  /** Unsigned XDR for extend, if the sentinel produced one. */
-  extend_xdr?: string;
   /** ISO-8601 timestamp of the scan. */
   scanned_at: string;
   /** Error message if the scan failed for this contract. */
@@ -42,8 +115,6 @@ export interface ContractScanResult {
 
 /** Top-level scan report wrapping all contract results. */
 export interface ScanReport {
-  /** Protocol version targeted. */
-  protocol_version?: string;
   /** RPC endpoint used. */
   rpc_url: string;
   /** All per-contract results. */

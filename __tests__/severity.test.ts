@@ -74,11 +74,9 @@ describe("severity", () => {
 
     test("Archived contract shows action required", () => {
       const result: ContractScanResult = makeResult("Archived", 0, 0, 0);
-      result.restore_xdr = "AAAAAg==";
       const summary = formatAlertSummary(result);
       expect(summary).toContain("💀");
       expect(summary).toContain("Action required now");
-      expect(summary).toContain("restore XDR");
     });
 
     test("uses label when available", () => {
@@ -97,15 +95,15 @@ describe("severity", () => {
 });
 
 function makeResult(
-  health: HealthBand,
+  band: HealthBand,
   liveUntil: number,
   ledgersRemaining: number,
   daysRemaining: number
 ): ContractScanResult {
   return {
     address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
-    health,
-    live_until_ledger: liveUntil,
+    band,
+    live_until_ledger_seq: liveUntil,
     ledgers_remaining: ledgersRemaining,
     days_remaining: daysRemaining,
     healthy_days_threshold: 30,

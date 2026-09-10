@@ -15,8 +15,8 @@ export type SeverityMapping = {
   shouldAlert: boolean;
 };
 
-export function mapSeverity(health: HealthBand): SeverityMapping {
-  switch (health) {
+export function mapSeverity(band: HealthBand): SeverityMapping {
+  switch (band) {
     case "Healthy":
       return { severity: "none", emoji: "✅", label: "Healthy", shouldAlert: false };
     case "ExpiringSoon":
@@ -32,7 +32,7 @@ export function mapSeverity(health: HealthBand): SeverityMapping {
  * Determine if an alert should be fired for this scan result.
  */
 export function shouldAlert(result: ContractScanResult): boolean {
-  const mapping = mapSeverity(result.health);
+  const mapping = mapSeverity(result.band);
   return mapping.shouldAlert;
 }
 
@@ -40,26 +40,22 @@ export function shouldAlert(result: ContractScanResult): boolean {
  * Build a human-readable alert summary for a single contract.
  */
 export function formatAlertSummary(result: ContractScanResult): string {
-  const mapping = mapSeverity(result.health);
+  const mapping = mapSeverity(result.band);
   const label = result.label || result.address;
   const lines: string[] = [
     `${mapping.emoji} **${mapping.label}** — ${label}`,
     `Address: \`${result.address}\``,
   ];
 
-  if (result.health === "Archived") {
+  if (result.band === "Archived") {
     lines.push(`**Action required now** — contract state has been archived.`);
   }
 
-  if (result.health !== "Healthy") {
+  if (result.band !== "Healthy") {
     lines.push(
       `Ledgers remaining: ${result.ledgers_remaining.toLocaleString()} (~${result.days_remaining} days)`
     );
-    lines.push(`Live until ledger: ${result.live_until_ledger.toLocaleString()}`);
-  }
-
-  if (result.restore_xdr) {
-    lines.push(`\n⚠️ Unsigned restore XDR is available as a workflow artifact.`);
+    lines.push(`Live until ledger: ${result.live_until_ledger_seq.toLocaleString()}`);
   }
 
   if (result.error) {

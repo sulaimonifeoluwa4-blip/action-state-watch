@@ -56,7 +56,7 @@ async function run(): Promise<void> {
     // 6. Set outputs
     const criticalContracts = report.results
       .filter((r) => {
-        const mapping = mapSeverity(r.health);
+        const mapping = mapSeverity(r.band);
         return mapping.shouldAlert;
       })
       .map((r) => r.address);
@@ -99,36 +99,7 @@ async function run(): Promise<void> {
       core.info("All contracts are healthy. No alerts to send.");
     }
 
-    // 8. Write unsigned XDR artifacts if any
-    const xdrResults = report.results.filter((r) => r.restore_xdr || r.extend_xdr);
-    if (xdrResults.length > 0) {
-      try {
-        const fs = require("fs");
-        const nodePath = require("path");
-        const xdrDir = nodePath.join(".", "state-watch-xdr");
-        fs.mkdirSync(xdrDir, { recursive: true });
-
-        for (const r of xdrResults) {
-          if (r.restore_xdr) {
-            const filePath = nodePath.join(xdrDir, `${r.address}_restore.xdr`);
-            fs.writeFileSync(filePath, r.restore_xdr);
-            core.info(`Wrote restore XDR: ${filePath}`);
-          }
-          if (r.extend_xdr) {
-            const filePath = nodePath.join(xdrDir, `${r.address}_extend.xdr`);
-            fs.writeFileSync(filePath, r.extend_xdr);
-            core.info(`Wrote extend XDR: ${filePath}`);
-          }
-        }
-
-        core.setOutput("restore-xdr-artifact", xdrDir);
-        core.info(`Wrote ${xdrResults.length} XDR file(s) to ${xdrDir}`);
-      } catch (e) {
-        core.warning(`Failed to write XDR artifacts: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-
-    // 9. Fail if any Critical or Archived findings
+    // 8. Fail if any Critical or Archived findings
     if (report.summary.critical > 0 || report.summary.archived > 0) {
       core.setFailed(
         `${report.summary.critical} contract(s) Critical, ${report.summary.archived} Archived`

@@ -7,8 +7,8 @@ describe("alerts/discord", () => {
       {
         address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
         label: "test-contract",
-        health: "Critical",
-        live_until_ledger: 5000,
+        band: "Critical",
+        live_until_ledger_seq: 5000,
         ledgers_remaining: 500,
         days_remaining: 5,
         healthy_days_threshold: 30,
@@ -33,14 +33,13 @@ describe("alerts/discord", () => {
     const results: ContractScanResult[] = [
       {
         address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
-        health: "Archived",
-        live_until_ledger: 0,
+        band: "Archived",
+        live_until_ledger_seq: 0,
         ledgers_remaining: 0,
         days_remaining: 0,
         healthy_days_threshold: 30,
         critical_days_threshold: 7,
         scanned_at: "2026-01-01T00:00:00.000Z",
-        restore_xdr: "AAAAAg==",
       },
     ];
 
@@ -48,17 +47,14 @@ describe("alerts/discord", () => {
 
     expect(message.embeds[0].title).toContain("Archived");
     expect(message.embeds[0].color).toBe(0x1a1a2e); // Dark
-    // Should include restore XDR field
-    const xdrField = message.embeds[0].fields!.find((f) => f.name.includes("Restore"));
-    expect(xdrField).toBeDefined();
   });
 
   test("returns empty message when all healthy", () => {
     const results: ContractScanResult[] = [
       {
         address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
-        health: "Healthy",
-        live_until_ledger: 200000,
+        band: "Healthy",
+        live_until_ledger_seq: 200000,
         ledgers_remaining: 100000,
         days_remaining: 30,
         healthy_days_threshold: 30,
@@ -76,8 +72,8 @@ describe("alerts/discord", () => {
       {
         address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
         label: "contract-a",
-        health: "Critical",
-        live_until_ledger: 5000,
+        band: "Critical",
+        live_until_ledger_seq: 5000,
         ledgers_remaining: 500,
         days_remaining: 5,
         healthy_days_threshold: 30,
@@ -86,8 +82,8 @@ describe("alerts/discord", () => {
       },
       {
         address: "GCEZxee7L6Dx8EtiYXRzWZ6F7zB3nJpQR3kdBbA6FPX6",
-        health: "ExpiringSoon",
-        live_until_ledger: 15000,
+        band: "ExpiringSoon",
+        live_until_ledger_seq: 15000,
         ledgers_remaining: 1500,
         days_remaining: 15,
         healthy_days_threshold: 30,

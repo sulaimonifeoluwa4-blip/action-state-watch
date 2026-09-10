@@ -43,8 +43,8 @@ describe("alerts/github-issue", () => {
   const criticalResult: ContractScanResult = {
     address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
     label: "test-contract",
-    health: "Critical",
-    live_until_ledger: 5000,
+    band: "Critical",
+    live_until_ledger_seq: 5000,
     ledgers_remaining: 500,
     days_remaining: 5,
     healthy_days_threshold: 30,
@@ -54,8 +54,8 @@ describe("alerts/github-issue", () => {
 
   const healthyResult: ContractScanResult = {
     address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
-    health: "Healthy",
-    live_until_ledger: 200000,
+    band: "Healthy",
+    live_until_ledger_seq: 200000,
     ledgers_remaining: 100000,
     days_remaining: 30,
     healthy_days_threshold: 30,
@@ -165,11 +165,10 @@ describe("alerts/github-issue", () => {
   test("creates issue for Archived contracts", async () => {
     const archivedResult: ContractScanResult = {
       ...criticalResult,
-      health: "Archived",
-      live_until_ledger: 0,
+      band: "Archived",
+      live_until_ledger_seq: 0,
       ledgers_remaining: 0,
       days_remaining: 0,
-      restore_xdr: "AAAAAg==",
     };
 
     mockIssues.listForRepo

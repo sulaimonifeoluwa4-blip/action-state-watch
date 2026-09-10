@@ -3,7 +3,14 @@ import { execFileSync, execSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { ContractsConfig, ContractEntry, ContractScanResult, ScanReport } from "./types";
+import {
+  ContractsConfig,
+  ContractEntry,
+  ContractScanResult,
+  HealthBand,
+  ScanReport,
+  SentinelScanOutput,
+} from "./types";
 
 /** Sentinel CLI binary name, pinned. */
 const SENTINEL_BINARY = "soroban-state-sentinel";
@@ -89,15 +96,15 @@ export async function runScan(
 
   for (const contract of config.contracts) {
     try {
-      const result = await scanContract(sentinelPath, contract, rpcUrl, config);
+      const result = await scanContract(sentinelPath, contract, rpcUrl);
       results.push(result);
     } catch (e) {
       core.warning(`Scan failed for ${contract.address}: ${e instanceof Error ? e.message : String(e)}`);
       results.push({
         address: contract.address,
         label: contract.label,
-        health: "Archived",
-        live_until_ledger: 0,
+        band: "Archived",
+        live_until_ledger_seq: 0,
         ledgers_remaining: 0,
         days_remaining: 0,
         healthy_days_threshold: 0,
@@ -110,10 +117,10 @@ export async function runScan(
 
   const summary = {
     total: results.length,
-    healthy: results.filter((r) => r.health === "Healthy").length,
-    expiring_soon: results.filter((r) => r.health === "ExpiringSoon").length,
-    critical: results.filter((r) => r.health === "Critical").length,
-    archived: results.filter((r) => r.health === "Archived").length,
+    healthy: results.filter((r) => r.band === "Healthy").length,
+    expiring_soon: results.filter((r) => r.band === "ExpiringSoon").length,
+    critical: results.filter((r) => r.band === "Critical").length,
+    archived: results.filter((r) => r.band === "Archived").length,
   };
 
   return {
@@ -123,14 +130,48 @@ export async function runScan(
   };
 }
 
+/** Map a sentinel band string to our HealthBand type. */
+function parseHealthBand(raw: string): HealthBand {
+  switch (raw) {
+    case "Healthy":
+    case "ExpiringSoon":
+    case "Critical":
+    case "Archived":
+      return raw;
+    default:
+      core.warning(`Unknown health band from sentinel: "${raw}" — defaulting to Archived`);
+      return "Archived";
+  }
+}
+
+/**
+ * Determine the overall health band for a contract from its scanned entries.
+ * The worst entry wins: Archived > Critical > ExpiringSoon > Healthy.
+ */
+function worstBand(entries: SentinelScanOutput["entries"]): HealthBand {
+  const order: HealthBand[] = ["Archived", "Critical", "ExpiringSoon", "Healthy"];
+  let worst: HealthBand = "Healthy";
+  for (const entry of entries) {
+    const band = parseHealthBand(entry.band);
+    if (order.indexOf(band) < order.indexOf(worst)) {
+      worst = band;
+    }
+  }
+  return worst;
+}
+
 /**
  * Scan a single contract via the sentinel CLI.
+ *
+ * The sentinel outputs a top-level ScanJson with an `entries[]` array
+ * (one per ledger entry of the contract).  We derive a single
+ * ContractScanResult by taking the worst health band and minimum
+ * remaining values across all entries.
  */
 async function scanContract(
   sentinelPath: string,
   contract: ContractEntry,
-  rpcUrl: string,
-  config: ContractsConfig
+  rpcUrl: string
 ): Promise<ContractScanResult> {
   const args: string[] = [
     "scan",
@@ -154,10 +195,8 @@ async function scanContract(
     args.push("--critical-days", String(contract.critical_days));
   }
 
-  // If safety-margin-ledgers is set in the global config, pass it
-  if (config.safety_margin_ledgers !== undefined) {
-    args.push("--safety-margin-ledgers", String(config.safety_margin_ledgers));
-  }
+  // NOTE: --safety-margin-ledgers does NOT exist in the real sentinel CLI.
+  // The sentinel uses health_config fields instead.  Removed.
 
   core.info(`Scanning ${contract.address} (${contract.label || "unlabeled"})...`);
 
@@ -169,20 +208,54 @@ async function scanContract(
     maxBuffer: 1024 * 1024, // 1MB buffer
   });
 
-  // Parse the JSON output
-  const parsed = JSON.parse(output);
+  // Parse the full ScanJson from the sentinel
+  const scanJson: SentinelScanOutput = JSON.parse(output);
+
+  if (!scanJson.entries || scanJson.entries.length === 0) {
+    // Sentinel returned no entries — treat as healthy with a warning
+    core.warning(`Sentinel returned 0 entries for ${contract.address}`);
+    return {
+      address: contract.address,
+      label: contract.label,
+      band: "Healthy",
+      live_until_ledger_seq: 0,
+      ledgers_remaining: 0,
+      days_remaining: 0,
+      healthy_days_threshold: scanJson.health_config?.healthy_min_days ?? contract.healthy_days ?? 30,
+      critical_days_threshold: scanJson.health_config?.critical_max_days ?? contract.critical_days ?? 7,
+      scanned_at: new Date(scanJson.generated_at_unix * 1000).toISOString(),
+    };
+  }
+
+  // Derive per-contract result from entries (worst band wins)
+  const band = worstBand(scanJson.entries);
+
+  // Minimum across all entries for remaining fields
+  let minLiveUntil = Infinity;
+  let minLedgersRemaining = Infinity;
+  let minDaysRemaining = Infinity;
+
+  for (const entry of scanJson.entries) {
+    if (entry.live_until_ledger_seq != null && entry.live_until_ledger_seq < minLiveUntil) {
+      minLiveUntil = entry.live_until_ledger_seq;
+    }
+    if (entry.ledgers_remaining != null && entry.ledgers_remaining < minLedgersRemaining) {
+      minLedgersRemaining = entry.ledgers_remaining;
+    }
+    if (entry.days_remaining != null && entry.days_remaining < minDaysRemaining) {
+      minDaysRemaining = entry.days_remaining;
+    }
+  }
+
   return {
     address: contract.address,
     label: contract.label,
-    health: parsed.health,
-    live_until_ledger: parsed.live_until_ledger ?? parsed.liveUntilLedgerSeq ?? 0,
-    ledgers_remaining: parsed.ledgers_remaining ?? parsed.ledgersRemaining ?? 0,
-    days_remaining: parsed.days_remaining ?? parsed.daysRemaining ?? 0,
-    healthy_days_threshold: parsed.healthy_days_threshold ?? contract.healthy_days ?? 30,
-    critical_days_threshold: parsed.critical_days_threshold ?? contract.critical_days ?? 7,
-    restore_xdr: parsed.restore_xdr ?? parsed.restoreXdr,
-    extend_xdr: parsed.extend_xdr ?? parsed.extendXdr,
-    scanned_at: parsed.scanned_at ?? new Date().toISOString(),
-    error: parsed.error,
+    band,
+    live_until_ledger_seq: minLiveUntil === Infinity ? 0 : minLiveUntil,
+    ledgers_remaining: minLedgersRemaining === Infinity ? 0 : minLedgersRemaining,
+    days_remaining: minDaysRemaining === Infinity ? 0 : minDaysRemaining,
+    healthy_days_threshold: scanJson.health_config?.healthy_min_days ?? contract.healthy_days ?? 30,
+    critical_days_threshold: scanJson.health_config?.critical_max_days ?? contract.critical_days ?? 7,
+    scanned_at: new Date(scanJson.generated_at_unix * 1000).toISOString(),
   };
 }

@@ -57,7 +57,7 @@ export async function handleGitHubIssues(
   const repo = { owner: context.repo.owner, repo: context.repo.repo };
 
   for (const result of results) {
-    const mapping = mapSeverity(result.health);
+    const mapping = mapSeverity(result.band);
 
     // Only create/update issues for Critical and Archived
     if (!mapping.shouldAlert) continue;
@@ -67,7 +67,7 @@ export async function handleGitHubIssues(
     if (existing) {
       // Update existing issue with latest status
       await commentOnIssue(octokit, repo, existing.number, result);
-    } else if (result.health === "Critical" || result.health === "Archived") {
+    } else if (result.band === "Critical" || result.band === "Archived") {
       // Create new issue
       await createIssue(octokit, repo, result);
     }
@@ -85,21 +85,18 @@ async function createIssue(
   repo: { owner: string; repo: string },
   result: ContractScanResult
 ): Promise<void> {
-  const mapping = mapSeverity(result.health);
+  const mapping = mapSeverity(result.band);
   const title = `[state-watch] ${mapping.label}: ${result.address}`;
   const body = [
     `## ${mapping.emoji} Contract State Alert`,
     "",
     `**Contract:** \`${result.address}\``,
     result.label ? `**Label:** ${result.label}` : "",
-    `**Health Band:** ${result.health}`,
+    `**Health Band:** ${result.band}`,
     `**Ledgers Remaining:** ${result.ledgers_remaining.toLocaleString()} (~${result.days_remaining} days)`,
-    `**Live Until Ledger:** ${result.live_until_ledger.toLocaleString()}`,
+    `**Live Until Ledger:** ${result.live_until_ledger_seq.toLocaleString()}`,
     `**Scanned At:** ${result.scanned_at}`,
     "",
-    result.restore_xdr
-      ? `### ⚠️ Unsigned Restore XDR\nAn unsigned restore XDR has been produced and is available as a workflow artifact.`
-      : "",
     result.error ? `### Error\n${result.error}` : "",
     "",
     "---",
@@ -130,18 +127,15 @@ async function commentOnIssue(
   issueNumber: number,
   result: ContractScanResult
 ): Promise<void> {
-  const mapping = mapSeverity(result.health);
+  const mapping = mapSeverity(result.band);
 
   const body = [
     `### ${mapping.emoji} Status Update — ${new Date().toISOString()}`,
     "",
-    `**Health Band:** ${result.health}`,
+    `**Health Band:** ${result.band}`,
     `**Ledgers Remaining:** ${result.ledgers_remaining.toLocaleString()} (~${result.days_remaining} days)`,
-    `**Live Until Ledger:** ${result.live_until_ledger.toLocaleString()}`,
+    `**Live Until Ledger:** ${result.live_until_ledger_seq.toLocaleString()}`,
     "",
-    result.restore_xdr
-      ? `⚠️ Unsigned restore XDR is available as a workflow artifact.`
-      : "",
     result.error ? `**Error:** ${result.error}` : "",
   ]
     .filter(Boolean)
@@ -189,7 +183,7 @@ async function handleRecovery(
     const address = addressMatch[1];
     const currentResult = results.find((r) => r.address === address);
 
-    if (currentResult && currentResult.health === "Healthy") {
+    if (currentResult && currentResult.band === "Healthy") {
       // Contract has recovered — close the issue with a comment
       try {
         await octokit.rest.issues.createComment({

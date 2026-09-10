@@ -28,6 +28,66 @@ import { runScan, resolveSentinelCli } from "../src/run-scan";
 
 const mockExecFileSync = execFileSync as jest.MockedFunction<typeof execFileSync>;
 
+/** Build a valid sentinel ScanJson for test purposes. */
+function makeScanJson(overrides?: { band?: string; live_until?: number; ledgers_remaining?: number; days_remaining?: number }) {
+  return {
+    schema_version: "1.0.0",
+    generated_at_unix: 1704067200,
+    command: {
+      subcommand: "scan",
+      contract_id: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
+      rpc_url: "https://soroban-testnet.stellar.org",
+    },
+    network: {
+      passphrase: "Test SDF Network ; September 2015",
+      protocol_version: 20,
+      latest_ledger: 12345,
+      ledger_close_seconds: 5,
+      ledger_close_seconds_source: "default",
+      fee_per_rent_1kb: 100,
+      fee_per_rent_1kb_source: "state_size_high",
+      average_soroban_state_size_bytes: null,
+      max_entry_ttl: 1209600,
+      min_persistent_ttl: 2073600,
+      min_temporary_ttl: 2073600,
+    },
+    health_config: {
+      healthy_min_days: 30,
+      critical_max_days: 7,
+      healthy_min_ledgers: 518400,
+      critical_max_ledgers: 120960,
+      extend_horizon_ledgers: 518400,
+    },
+    summary: {
+      entries_scanned: 1,
+      healthy: overrides?.band === "Healthy" ? 1 : 0,
+      expiring_soon: overrides?.band === "ExpiringSoon" ? 1 : 0,
+      critical: overrides?.band === "Critical" ? 1 : 0,
+      archived: overrides?.band === "Archived" ? 1 : 0,
+      has_critical: overrides?.band === "Critical" || overrides?.band === "Archived",
+    },
+    entries: [
+      {
+        id: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
+        label: "contract-instance",
+        kind: "contract-instance",
+        durability: "persistent",
+        band: overrides?.band ?? "Healthy",
+        current_ledger_seq: 12345,
+        live_until_ledger_seq: overrides?.live_until ?? 200000,
+        ledgers_remaining: overrides?.ledgers_remaining ?? 100000,
+        days_remaining: overrides?.days_remaining ?? 30,
+        estimated_archive_unix: null,
+        size_bytes: 128,
+        key_xdr: "AAAAAQ==",
+        ttl_key_xdr: "AAAAAQ==",
+        extend_to_healthy_cost_stroops: 100,
+        restore_cost_stroops: null,
+      },
+    ],
+  };
+}
+
 describe("run-scan", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -47,17 +107,7 @@ describe("run-scan", () => {
       };
       const rpcUrl = "https://soroban-testnet.stellar.org";
 
-      // Mock successful scan output
-      const sentinelOutput = JSON.stringify({
-        health: "Healthy",
-        live_until_ledger: 200000,
-        ledgers_remaining: 100000,
-        days_remaining: 30,
-        healthy_days_threshold: 30,
-        critical_days_threshold: 7,
-        scanned_at: "2026-01-01T00:00:00.000Z",
-      });
-      mockExecFileSync.mockReturnValue(sentinelOutput);
+      mockExecFileSync.mockReturnValue(JSON.stringify(makeScanJson({ band: "Healthy" })));
 
       const report = await runScan(sentinelPath, config, rpcUrl);
 
@@ -79,6 +129,9 @@ describe("run-scan", () => {
         "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4"
       );
 
+      // Verify NO --safety-margin-ledgers flag (doesn't exist in real sentinel)
+      expect(args).not.toContain("--safety-margin-ledgers");
+
       // Third arg: options object (NOT a shell string)
       expect(callArgs[2]).toEqual(
         expect.objectContaining({
@@ -88,10 +141,32 @@ describe("run-scan", () => {
         })
       );
 
-      // Verify report
+      // Verify report uses new field names
       expect(report.results).toHaveLength(1);
-      expect(report.results[0].health).toBe("Healthy");
+      expect(report.results[0].band).toBe("Healthy");
       expect(report.summary.healthy).toBe(1);
+    });
+
+    test("parses sentinel ScanJson and maps band correctly", async () => {
+      const config: ContractsConfig = {
+        network: "testnet",
+        contracts: [
+          {
+            address: "CAEDHSOD3TXIAZF2BZMMNX7A2OKBCVE4WU7A6RWTHGGHWHJXHEQUMAT4",
+          },
+        ],
+      };
+
+      mockExecFileSync.mockReturnValue(
+        JSON.stringify(makeScanJson({ band: "ExpiringSoon", live_until: 5000, ledgers_remaining: 500, days_remaining: 5 }))
+      );
+
+      const report = await runScan("/usr/bin/sentinel", config, "https://rpc.test");
+
+      expect(report.results[0].band).toBe("ExpiringSoon");
+      expect(report.results[0].live_until_ledger_seq).toBe(5000);
+      expect(report.results[0].ledgers_remaining).toBe(500);
+      expect(report.results[0].days_remaining).toBe(5);
     });
 
     test("passes --keys flag when keys are specified", async () => {
@@ -105,17 +180,7 @@ describe("run-scan", () => {
         ],
       };
 
-      mockExecFileSync.mockReturnValue(
-        JSON.stringify({
-          health: "ExpiringSoon",
-          live_until_ledger: 5000,
-          ledgers_remaining: 500,
-          days_remaining: 5,
-          healthy_days_threshold: 30,
-          critical_days_threshold: 7,
-          scanned_at: "2026-01-01T00:00:00.000Z",
-        })
-      );
+      mockExecFileSync.mockReturnValue(JSON.stringify(makeScanJson({ band: "ExpiringSoon" })));
 
       await runScan("/usr/bin/sentinel", config, "https://rpc.test");
 
@@ -137,17 +202,7 @@ describe("run-scan", () => {
         ],
       };
 
-      mockExecFileSync.mockReturnValue(
-        JSON.stringify({
-          health: "Healthy",
-          live_until_ledger: 200000,
-          ledgers_remaining: 100000,
-          days_remaining: 30,
-          healthy_days_threshold: 14,
-          critical_days_threshold: 3,
-          scanned_at: "2026-01-01T00:00:00.000Z",
-        })
-      );
+      mockExecFileSync.mockReturnValue(JSON.stringify(makeScanJson({ band: "Healthy" })));
 
       await runScan("/usr/bin/sentinel", config, "https://rpc.test");
 
@@ -158,7 +213,7 @@ describe("run-scan", () => {
       expect(args).toContain("3");
     });
 
-    test("passes --safety-margin-ledgers when set in global config", async () => {
+    test("does NOT pass --safety-margin-ledgers (non-existent flag)", async () => {
       const config: ContractsConfig = {
         network: "testnet",
         contracts: [
@@ -169,21 +224,12 @@ describe("run-scan", () => {
         safety_margin_ledgers: 120960,
       };
 
-      mockExecFileSync.mockReturnValue(
-        JSON.stringify({
-          health: "Healthy",
-          live_until_ledger: 200000,
-          ledgers_remaining: 100000,
-          days_remaining: 30,
-          scanned_at: "2026-01-01T00:00:00.000Z",
-        })
-      );
+      mockExecFileSync.mockReturnValue(JSON.stringify(makeScanJson({ band: "Healthy" })));
 
       await runScan("/usr/bin/sentinel", config, "https://rpc.test");
 
       const args = mockExecFileSync.mock.calls[0][1] as string[];
-      expect(args).toContain("--safety-margin-ledgers");
-      expect(args).toContain("120960");
+      expect(args).not.toContain("--safety-margin-ledgers");
     });
 
     test("handles scan failure gracefully", async () => {
@@ -203,12 +249,12 @@ describe("run-scan", () => {
       const report = await runScan("/usr/bin/sentinel", config, "https://rpc.test");
 
       expect(report.results).toHaveLength(1);
-      expect(report.results[0].health).toBe("Archived");
+      expect(report.results[0].band).toBe("Archived");
       expect(report.results[0].error).toBe("sentinel binary not found");
       expect(report.summary.archived).toBe(1);
     });
 
-    test("handles camelCase field names from sentinel output", async () => {
+    test("handles empty entries from sentinel", async () => {
       const config: ContractsConfig = {
         network: "testnet",
         contracts: [
@@ -218,22 +264,23 @@ describe("run-scan", () => {
         ],
       };
 
-      // camelCase output from sentinel
+      // Sentinel returned no entries
       mockExecFileSync.mockReturnValue(
         JSON.stringify({
-          health: "ExpiringSoon",
-          liveUntilLedgerSeq: 5000,
-          ledgersRemaining: 500,
-          daysRemaining: 5,
-          scanned_at: "2026-01-01T00:00:00.000Z",
+          schema_version: "1.0.0",
+          generated_at_unix: 1704067200,
+          command: { subcommand: "scan", contract_id: "C...", rpc_url: "https://..." },
+          network: { passphrase: "", protocol_version: 20, latest_ledger: 0, ledger_close_seconds: 5, ledger_close_seconds_source: "default", fee_per_rent_1kb: 0, fee_per_rent_1kb_source: "default", average_soroban_state_size_bytes: null, max_entry_ttl: 0, min_persistent_ttl: 0, min_temporary_ttl: 0 },
+          health_config: { healthy_min_days: 30, critical_max_days: 7, healthy_min_ledgers: 0, critical_max_ledgers: 0, extend_horizon_ledgers: 0 },
+          summary: { entries_scanned: 0, healthy: 0, expiring_soon: 0, critical: 0, archived: 0, has_critical: false },
+          entries: [],
         })
       );
 
       const report = await runScan("/usr/bin/sentinel", config, "https://rpc.test");
 
-      expect(report.results[0].live_until_ledger).toBe(5000);
-      expect(report.results[0].ledgers_remaining).toBe(500);
-      expect(report.results[0].days_remaining).toBe(5);
+      expect(report.results).toHaveLength(1);
+      expect(report.results[0].band).toBe("Healthy");
     });
 
     test("never concatenates sentinelPath into a shell command string", async () => {
@@ -247,15 +294,7 @@ describe("run-scan", () => {
         ],
       };
 
-      mockExecFileSync.mockReturnValue(
-        JSON.stringify({
-          health: "Healthy",
-          live_until_ledger: 200000,
-          ledgers_remaining: 100000,
-          days_remaining: 30,
-          scanned_at: "2026-01-01T00:00:00.000Z",
-        })
-      );
+      mockExecFileSync.mockReturnValue(JSON.stringify(makeScanJson({ band: "Healthy" })));
 
       await runScan(sentinelPath, config, "https://rpc.test");
 

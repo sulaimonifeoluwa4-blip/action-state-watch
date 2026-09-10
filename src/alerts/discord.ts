@@ -28,7 +28,7 @@ const SEVERITY_COLORS: Record<string, number> = {
  */
 export function buildDiscordMessage(results: ContractScanResult[]): DiscordMessage {
   const criticalResults = results.filter((r) => {
-    const mapping = mapSeverity(r.health);
+    const mapping = mapSeverity(r.band);
     return mapping.shouldAlert;
   });
 
@@ -39,7 +39,7 @@ export function buildDiscordMessage(results: ContractScanResult[]): DiscordMessa
   const embeds: DiscordEmbed[] = [];
 
   for (const result of criticalResults) {
-    const mapping = mapSeverity(result.health);
+    const mapping = mapSeverity(result.band);
     const color = SEVERITY_COLORS[mapping.severity] || 0x95a5a6;
 
     const embed: DiscordEmbed = {
@@ -50,21 +50,12 @@ export function buildDiscordMessage(results: ContractScanResult[]): DiscordMessa
       timestamp: result.scanned_at || new Date().toISOString(),
     };
 
-    if (result.health !== "Healthy") {
+    if (result.band !== "Healthy") {
       embed.fields = [
         { name: "Ledgers Remaining", value: result.ledgers_remaining.toLocaleString(), inline: true },
         { name: "Days Remaining", value: `~${result.days_remaining}`, inline: true },
-        { name: "Live Until Ledger", value: result.live_until_ledger.toLocaleString(), inline: true },
+        { name: "Live Until Ledger", value: result.live_until_ledger_seq.toLocaleString(), inline: true },
       ];
-    }
-
-    if (result.restore_xdr) {
-      embed.fields = embed.fields || [];
-      embed.fields.push({
-        name: "⚠️ Restore XDR",
-        value: "Available as workflow artifact",
-        inline: false,
-      });
     }
 
     embed.footer = { text: "Soroban State Watch" };
