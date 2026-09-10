@@ -49,7 +49,7 @@ jobs:
 
       - name: Build sentinel binary
         working-directory: sentinel-src
-        run: cargo build --release --bin soroban-state-sentinel
+        run: cargo build --release --bin soroban-state-sentinel -p sentinel-cli
 
       - name: Add sentinel binary to PATH
         run: echo "${{ github.workspace }}/sentinel-src/target/release" >> "$GITHUB_PATH"
