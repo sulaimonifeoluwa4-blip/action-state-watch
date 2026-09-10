@@ -183,7 +183,7 @@ async function handleRecovery(
 
   for (const issue of issues.data) {
     // Extract contract address from issue title
-    const addressMatch = issue.title.match(/\b(C[A-Z0-9]{55})\b/);
+    const addressMatch = issue.title.match(/\b([CG][A-Z0-9]{55})\b/);
     if (!addressMatch) continue;
 
     const address = addressMatch[1];
