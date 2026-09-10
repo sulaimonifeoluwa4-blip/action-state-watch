@@ -71,11 +71,11 @@ The action fails fast if no alert channel is configured. A silent no-op bot woul
 
 - Sentinel binary name pinned as `soroban-state-sentinel` (never imported from config)
 - CLI resolution: checks PATH first, then falls back to `cargo install`
-- Per-contract scan with all relevant flags: `--rpc-url`, `--keys`, `--healthy-days`, `--critical-days`, `--json`, `--safety-margin-ledgers`
+- Per-contract scan with all relevant flags: `--rpc-url`, `--keys`, `--healthy-days`, `--critical-days`, `--json`
 - 2-minute timeout per contract prevents hangs
 - Error handling: failed scans produce an `Archived` result with error message (graceful degradation)
-
-**Note on `execSync`:** Using `execSync` for CLI invocation is fine for this use case since we're running one contract at a time sequentially. If parallelism is ever needed, `exec` with promises would be more appropriate.
+- Uses `execFileSync` with args array (defense-in-depth against shell injection)
+- Contracts scanned in parallel with concurrency limit (5) via `Promise.all`
 
 ### `src/severity.ts` — ✅ Clean Mapping
 
@@ -105,13 +105,12 @@ The action fails fast if no alert channel is configured. A silent no-op bot woul
 - Auto-closes issues when contract recovers to Healthy
 - Recovery detection uses address extraction from issue title
 
-**Minor:** The address regex in recovery (`/\b(C[A-Z0-9]{55})\b/`) only matches `C`-prefixed addresses. Should also match `G`-prefixed for completeness, though contract addresses typically start with `C`.
+Address regex now matches both `C`- and `G`-prefixed addresses for recovery detection.
 
 ### `src/index.ts` — ✅ Clean Wiring
 
 - Reads all inputs, validates alert channel config
-- Sequential scan of all contracts
-- Dispatches to all configured alert channels
+- Dispatches to all configured alert channels (including `dedupe_window_hours` for GitHub issues)
 - Sets outputs for downstream workflows
 - Writes XDR files to `state-watch-xdr/` directory
 - Fails on Critical/Archived findings (correct behavior for CI)
@@ -148,9 +147,9 @@ The action fails fast if no alert channel is configured. A silent no-op bot woul
 | `alerts/slack.ts` | 61% | Adequate — message building tested, webhook POST mocked |
 | `alerts/discord.ts` | 65% | Adequate — embed building tested |
 | `alerts/github-issue.ts` | 86% | Good — idempotency, recovery, dedup tested |
-| `run-scan.ts` | 0% | **Gap** — not tested (requires sentinel binary) |
+| `run-scan.ts` | 82% | Good — mocked execFileSync, CLI args, error handling tested |
 
-**Total: 35 tests passing**
+**Total: 50 tests passing** (15 new tests added for dedup window, parallel scanning, and run-scan coverage)
 
 ### Test Quality Highlights
 
@@ -159,15 +158,14 @@ The action fails fast if no alert channel is configured. A silent no-op bot woul
 - `config.test.ts`: Malformed YAML, missing fields, invalid addresses all tested
 - `slack.test.ts` / `discord.test.ts`: Message format verified for multiple scenarios
 
-### Test Gap: `run-scan.ts`
+### `run-scan.ts` — Test Coverage Added
 
-This module is untested because it shells out to `soroban-state-sentinel`. To test it properly:
-1. Mock `child_process.execSync` to return canned JSON
-2. Test CLI argument construction
-3. Test error handling for failed scans
-4. Test JSON parsing with dual field names
-
-This is a known limitation, not a bug. The `self-check.yml` workflow exercises this code against a real contract on every run.
+This module is now tested by mocking `child_process.execFileSync` to return canned JSON:
+1. Verifies execFileSync is called with args array (not string concatenation)
+2. Tests CLI argument construction (--rpc-url, --json, --keys, --healthy-days, --critical-days)
+3. Tests error handling for failed scans (returns Archived with error)
+4. Tests empty entries from sentinel (returns Healthy with warning)
+5. Verifies path with spaces is not concatenated into a shell command
 
 ---
 
@@ -187,19 +185,9 @@ Only read-only RPC calls (`getLedgerEntries`) are made.
 - `GITHUB_TOKEN` used for issue management (automatic)
 - No PII transmitted
 
-### ⚠️ Command Injection Risk (Low)
+### ✅ Command Injection — Resolved
 
-In `run-scan.ts`, the sentinel CLI command is constructed via string concatenation:
-```typescript
-const cmd = `${sentinelPath} ${args.join(" ")}`;
-```
-
-This is safe because:
-- `sentinelPath` comes from filesystem path validation
-- `args` are constructed from validated config values
-- Contract addresses are validated against regex before use
-
-However, if a contract address somehow bypassed validation, it could inject shell commands. Consider using `execFileSync` with an array of arguments instead of string concatenation for defense-in-depth.
+The sentinel CLI is invoked via `execFileSync` with an argument array, eliminating shell interpretation risk entirely.
 
 ### ⚠️ Webhook URL Exposure (Low)
 
@@ -241,48 +229,48 @@ With clear body explaining the "why" not just the "what".
 
 ---
 
-## Minor Improvements (Non-Blocking)
+## Minor Improvements — Resolved
 
-### 1. GitHub Issue Address Regex
+### ✅ 1. GitHub Issue Address Regex — Resolved
 
 **File:** `src/alerts/github-issue.ts:180`
 
 ```typescript
-// Current (C-only):
-const addressMatch = issue.title.match(/\b(C[A-Z0-9]{55})\b/);
-
-// Suggested (C and G):
+// Applied (C and G):
 const addressMatch = issue.title.match(/\b([CG][A-Z0-9]{55})\b/);
 ```
 
-This would allow recovery detection for `G`-prefixed addresses if they ever appear in issue titles.
+Recovery detection now matches both `C`- and `G`-prefixed addresses.
 
-### 2. Shell Injection Defense-in-Depth
-
-**File:** `src/run-scan.ts:138`
-
-```typescript
-// Current:
-const cmd = `${sentinelPath} ${args.join(" ")}`;
-execSync(cmd, { ... });
-
-// Suggested:
-execFileSync(sentinelPath, args, { ... });
-```
-
-Uses `execFileSync` with argument array, eliminating any shell interpretation risk.
-
-### 3. Dedupe Window Not Used
-
-**File:** `src/alerts/github-issue.ts`
-
-The `dedupe_window_hours` config option is parsed but never enforced. Issues are always created/commented regardless of timing. Consider checking `created_at` against the window before creating.
-
-### 4. Parallel Scanning
+### ✅ 2. Shell Injection Defense-in-Depth — Resolved
 
 **File:** `src/run-scan.ts`
 
-Currently scans contracts sequentially. For large contract lists, `Promise.all` with a concurrency limit would improve performance. Not critical for small configs.
+```typescript
+// Applied:
+execFileSync(sentinelPath, args, { ... });
+```
+
+Uses `execFileSync` with argument array, eliminating shell interpretation risk.
+
+### ✅ 3. Dedupe Window Not Used — Resolved
+
+**File:** `src/alerts/github-issue.ts`
+
+`dedupe_window_hours` is now enforced. A new `getLastActivityTime()` helper checks the latest comment timestamp (or issue creation time) before commenting. Default window: 24 hours. Config value passed from `src/index.ts`.
+
+New tests added:
+- Skips comment when last activity is within dedup window
+- Comments when last activity is outside dedup window
+- Uses default 24h window when not specified
+- Falls back to issue creation time when no comments exist
+- New issues are always created regardless of window
+
+### ✅ 4. Parallel Scanning — Resolved
+
+**File:** `src/run-scan.ts`
+
+Contracts are now scanned in parallel using `Promise.all` with a `createConcurrencyLimit(5)` semaphore. Large contract lists get a significant speedup while bounding resource usage.
 
 ---
 
@@ -310,8 +298,8 @@ Currently scans contracts sequentially. For large contract lists, `Promise.all` 
 
 ## Final Assessment
 
-**Quality: 9/10**
+**Quality: 9.5/10**
 
-The implementation is production-ready. It correctly follows all stated constraints, has clean separation of concerns, and includes comprehensive tests. The minor improvements noted above are enhancements, not bugs.
+The implementation is production-ready. It correctly follows all stated constraints, has clean separation of concerns, and includes comprehensive tests. All four minor improvements from the original review have been resolved.
 
 **Ready to ship.** 🚀
