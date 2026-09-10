@@ -44,8 +44,7 @@ jobs:
           sentinel-cli-path: 'install'
           config-path: 'contracts.example.yml'
           rpc-url: ${{ github.event.inputs.rpc_url || 'https://soroban-testnet.stellar.org' }}
-          # No alert channels configured for self-check — alerting is tested separately
-          # This job verifies the scan runs successfully against a real contract
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Print scan result summary
         if: always()
